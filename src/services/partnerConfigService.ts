@@ -89,7 +89,10 @@ export class PartnerConfigService {
       exclude_categories: Array.isArray(o.exclude_categories)
         ? o.exclude_categories.filter((c): c is string => typeof c === 'string')
         : undefined,
-      max_recommendations: typeof o.max_recommendations === 'number' ? o.max_recommendations : undefined,
+      max_recommendations:
+        typeof o.max_recommendations === 'number'
+          ? Math.min(500, Math.max(0, Math.floor(o.max_recommendations)))
+          : undefined,
       tier_multipliers:
         o.tier_multipliers && typeof o.tier_multipliers === 'object' && o.tier_multipliers !== null
           ? Object.fromEntries(

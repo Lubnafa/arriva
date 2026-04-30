@@ -16,6 +16,10 @@ export function createTestEnv(overrides?: Partial<Env>): Env {
     LOG_LEVEL: 'error',
     RATE_LIMIT_WINDOW_MS: 60000,
     RATE_LIMIT_MAX_REQUESTS: 100,
+    TRUST_PROXY_HOPS: 0,
+    MCP_CORS_ORIGINS: '',
+    HSTS_ENABLED: false,
+    JSON_BODY_LIMIT: '256kb',
     ...overrides,
   };
 }

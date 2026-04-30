@@ -1,6 +1,6 @@
 import { z, type ZodError } from 'zod';
 import type { RequestHandler } from 'express';
-import { NotFoundError, ValidationError } from '../utils/errors';
+import { ValidationError } from '../utils/errors';
 import { TOOL_NAME } from '../constants';
 
 const uuidSchema = z.string().uuid();
@@ -19,8 +19,14 @@ export const getPartnerRulesSchema = z.object({
   partner_id: z.string().min(1).max(100),
 });
 
+const mcpToolNameSchema = z.enum([
+  TOOL_NAME.GET_MEMBER_RECOMMENDATIONS,
+  TOOL_NAME.GET_MEMBER_PROFILE,
+  TOOL_NAME.GET_PARTNER_RULES,
+]);
+
 export const mcpEnvelopeSchema = z.object({
-  tool_name: z.string().min(1),
+  tool_name: mcpToolNameSchema,
   arguments: z.record(z.unknown()).default({}),
 });
 
@@ -81,8 +87,10 @@ export function parseAndValidateMcpInvoke(body: unknown): ParsedMcpInvoke {
       }
       return { tool_name, arguments: parsed.data };
     }
-    default:
-      throw new NotFoundError('Unknown tool_name');
+    default: {
+      const _exhaustive: never = tool_name;
+      return _exhaustive;
+    }
   }
 }
 

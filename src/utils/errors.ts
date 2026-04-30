@@ -76,3 +76,10 @@ export class InternalError extends AppError {
     super(message, 500, 'INTERNAL_ERROR', false);
   }
 }
+
+/** Client did not send `Content-Type: application/json` where required. */
+export class UnsupportedMediaTypeError extends AppError {
+  public constructor() {
+    super('Unsupported Media Type', 415, 'UNSUPPORTED_MEDIA_TYPE', true);
+  }
+}

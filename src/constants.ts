@@ -35,6 +35,7 @@ export const ERROR_CODE = {
   SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   UPSTREAM_ERROR: 'UPSTREAM_ERROR',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  UNSUPPORTED_MEDIA_TYPE: 'UNSUPPORTED_MEDIA_TYPE',
 } as const;
 
 /** Service identifier embedded in every log line. */

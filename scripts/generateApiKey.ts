@@ -1,3 +1,5 @@
+import 'dotenv/config';
+
 import { randomBytes } from 'node:crypto';
 import { hashApiKey } from '../src/auth/apiKeyHash';
 

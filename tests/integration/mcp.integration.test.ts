@@ -178,7 +178,7 @@ describe('MCP HTTP integration', () => {
     expect(res.body.recommendations).toHaveLength(partnerRulesWithCap.max_recommendations);
   });
 
-  it('returns 404 for unknown tools', async () => {
+  it('returns 400 when tool_name is not a known MCP tool', async () => {
     const res = await request(built.app)
       .post('/v1/mcp/invoke')
       .set(authHeader)
@@ -186,9 +186,26 @@ describe('MCP HTTP integration', () => {
         tool_name: 'unknown_tool_name',
         arguments: {},
       })
-      .expect(404);
+      .expect(400);
 
+    expect(res.body.error).toBe('VALIDATION_ERROR');
+  });
+
+  it('returns 415 when invoke POST is not application/json', async () => {
+    const res = await request(built.app)
+      .post('/v1/mcp/invoke')
+      .set(authHeader)
+      .set('Content-Type', 'text/plain')
+      .send('{}')
+      .expect(415);
+
+    expect(res.body.error).toBe('UNSUPPORTED_MEDIA_TYPE');
+  });
+
+  it('returns JSON 404 for unknown routes', async () => {
+    const res = await request(built.app).get('/no-such-route').expect(404);
     expect(res.body.error).toBe('NOT_FOUND');
+    expect(res.body.requestId).toBeDefined();
   });
 });
 

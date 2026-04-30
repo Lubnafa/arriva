@@ -1,14 +1,21 @@
+import 'dotenv/config';
+
 import path from 'node:path';
 
 import express, { type Express, Router } from 'express';
 import { loadEnv, type Env } from './config/env';
-import { ROUTES } from './constants';
+import { ERROR_CODE, HTTP_HEADER, ROUTES } from './constants';
 import { initLogger, getLogger } from './utils/logger';
 import { createApiKeyAuth } from './auth/apiKeyAuth';
 import { SlidingWindowRateLimiter, createRateLimiterMiddleware } from './auth/rateLimiter';
 import { createDefaultKeyStore, type KeyStore } from './auth/keyStore';
 import { requestIdMiddleware } from './middleware/requestId';
-import { securityHeadersMiddleware } from './middleware/securityHeaders';
+import {
+  cacheControlNoStoreMiddleware,
+  conciergeContentSecurityPolicyMiddleware,
+  createHelmetMiddleware,
+} from './middleware/httpSecurity';
+import { requireJsonContentTypeForMcpInvoke } from './middleware/requireJsonContentType';
 import { apiVersionMiddleware } from './middleware/apiVersion';
 import { createDefaultRateLimitHeadersMiddleware } from './middleware/defaultRateLimitHeaders';
 import { createErrorHandler } from './middleware/errorHandler';
@@ -66,14 +73,20 @@ export function buildApp(options: BuildAppOptions): BuiltApplication {
   const app = express();
   app.disable('x-powered-by');
 
-  app.use(securityHeadersMiddleware);
-  app.use(express.json({ limit: '256kb' }));
+  if (env.TRUST_PROXY_HOPS > 0) {
+    app.set('trust proxy', env.TRUST_PROXY_HOPS);
+  }
+
+  app.use(createHelmetMiddleware(env));
+  app.use(cacheControlNoStoreMiddleware);
+  app.use(requireJsonContentTypeForMcpInvoke);
+  app.use(express.json({ limit: env.JSON_BODY_LIMIT, strict: true }));
   app.use(requestIdMiddleware);
   app.use(apiVersionMiddleware);
   app.use(createDefaultRateLimitHeadersMiddleware(env));
 
   const conciergeHtmlPath = path.join(process.cwd(), 'index.html');
-  app.get(['/', '/concierge'], (_req, res, next): void => {
+  app.get(['/', '/concierge'], conciergeContentSecurityPolicyMiddleware, (_req, res, next): void => {
     res.sendFile(conciergeHtmlPath, (err): void => {
       if (err) next();
     });
@@ -92,12 +105,20 @@ export function buildApp(options: BuildAppOptions): BuiltApplication {
   app.get(ROUTES.HEALTH_DEEP, apiKeyAuth, rateLimiterMiddleware, createDeepHealthHandler(healthDeps));
 
   const mcpRouter = Router();
-  mcpRouter.use(createMcpCorsMiddleware());
+  mcpRouter.use(createMcpCorsMiddleware(env));
   mcpRouter.use(apiKeyAuth);
   mcpRouter.use(rateLimiterMiddleware);
   mcpRouter.use(createMcpRouter({ memberService, partnerConfigService }));
 
   app.use(ROUTES.MCP_V1_PREFIX, mcpRouter);
+
+  app.use((req, res): void => {
+    res.setHeader(HTTP_HEADER.API_VERSION, '1.0');
+    res.status(404).json({
+      error: ERROR_CODE.NOT_FOUND,
+      requestId: req.requestId ?? 'unknown',
+    });
+  });
 
   app.use(createErrorHandler(env));
 

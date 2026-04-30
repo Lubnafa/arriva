@@ -12,6 +12,21 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(100),
+  /** Number of reverse proxies in front of this app (0 = disabled). Enables `X-Forwarded-*` parsing when > 0. */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(32).default(0),
+  /**
+   * Comma-separated allowed browser `Origin` values for `/v1/mcp/*`.
+   * Empty + development: permissive `*` for local demos.
+   * Empty + staging/production: no wildcard (browser cross-origin calls blocked unless listed here).
+   */
+  MCP_CORS_ORIGINS: z.string().default(''),
+  /** Send `Strict-Transport-Security` only when TLS terminates at this process or you know clients always use HTTPS. */
+  HSTS_ENABLED: z
+    .enum(['true', 'false', '0', '1'])
+    .default('false')
+    .transform((v) => v === 'true' || v === '1'),
+  /** Max JSON body size (Express `limit`, e.g. `256kb`, `1mb`). */
+  JSON_BODY_LIMIT: z.string().min(2).default('256kb'),
 });
 
 export type Env = z.infer<typeof envSchema>;

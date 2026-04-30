@@ -156,6 +156,8 @@ All tools require `Authorization: Bearer <api_key>` on `POST /v1/mcp/invoke`. Op
 
 Missing or incorrect keys intentionally return the same `401 {"error":"UNAUTHORIZED"}` payload.
 
+> **Browser demo note:** The AI Concierge UI (`index.html`) calls the Anthropic API directly from the browser using a key the user pastes in. This is intentional for a local demo. For production, proxy the call through a `/v1/chat` route on this server so the Anthropic key is never exposed client-side.
+
 ## Seeded test data
 
 Shared fixtures (see `tests/fixtures`) keep unit and integration suites aligned:

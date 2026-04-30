@@ -1,5 +1,11 @@
 import type { ErrorRequestHandler } from 'express';
-import { AppError, RateLimitError, UnauthorizedError, ValidationError } from '../utils/errors';
+import {
+  AppError,
+  RateLimitError,
+  UnauthorizedError,
+  UnsupportedMediaTypeError,
+  ValidationError,
+} from '../utils/errors';
 import { ERROR_CODE, HTTP_HEADER } from '../constants';
 import { getLogger } from '../utils/logger';
 import type { Env } from '../config/env';
@@ -28,6 +34,15 @@ export function createErrorHandler(env: Env): ErrorRequestHandler {
       getLogger().warn({ err: err.code }, 'unauthorized');
       res.status(401).json({
         error: ERROR_CODE.UNAUTHORIZED,
+        requestId,
+      });
+      return;
+    }
+
+    if (err instanceof UnsupportedMediaTypeError) {
+      getLogger().warn({ err: err.code }, 'unsupported_media_type');
+      res.status(415).json({
+        error: ERROR_CODE.UNSUPPORTED_MEDIA_TYPE,
         requestId,
       });
       return;

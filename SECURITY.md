@@ -34,6 +34,15 @@ Use `npm run generate-api-key -- <partner_id>` to mint keys. Transfer raw secret
 4. Remove the compromised hash from the store once telemetry shows zero usage.
 5. Capture an incident record noting scope, timeline, and whether upstream caches need flushing (`PartnerConfigService.clearCache()` pattern).
 
+## HTTP hardening (production)
+
+- **Helmet** applies baseline headers (frameguard, MIME sniffing, referrer policy, etc.). `HSTS_ENABLED` is opt-in because `Strict-Transport-Security` must only be sent when clients always use HTTPS (often when TLS terminates at the load balancer and the app is on HTTP internally, keep HSTS off here and enable it at the edge).
+- **`TRUST_PROXY_HOPS`**: set to the number of reverse proxies in front of the app (for example `1` behind a single ALB/nginx) so `X-Forwarded-For` is interpreted correctly when you later add IP-aware logic.
+- **`MCP_CORS_ORIGINS`**: comma-separated browser `Origin` allowlist for `/v1/mcp/*`. In `development` with an empty list, `Access-Control-Allow-Origin: *` is used for local demos. In `staging` / `production` with an empty list, wildcard CORS is **not** sent (browser cross-origin access is blocked unless you list explicit origins).
+- **`JSON_BODY_LIMIT`**: caps JSON body size (Express `limit`).
+- **`POST /v1/mcp/invoke`** requires `Content-Type: application/json` (including `application/json; charset=utf-8`).
+- **`X-Request-ID`**: only safe alphanumeric / `._-` tokens up to 128 characters are accepted; otherwise a new UUID is used.
+
 ## Dependency updates
 
 - Run `npm audit` during each release train; patch moderate/high CVEs before promoting to production.
