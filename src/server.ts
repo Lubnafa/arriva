@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import express, { type Express, Router } from 'express';
 import { loadEnv, type Env } from './config/env';
 import { ROUTES } from './constants';
@@ -14,6 +16,7 @@ import { CircuitBreaker } from './utils/circuitBreaker';
 import { MemberService } from './services/memberService';
 import { PartnerConfigService } from './services/partnerConfigService';
 import { createMcpRouter } from './mcp/invoke';
+import { createMcpCorsMiddleware } from './middleware/mcpCors';
 import { createShallowHealthHandler, createDeepHealthHandler, readAppVersion } from './health/health';
 import type { Server } from 'node:http';
 
@@ -69,6 +72,13 @@ export function buildApp(options: BuildAppOptions): BuiltApplication {
   app.use(apiVersionMiddleware);
   app.use(createDefaultRateLimitHeadersMiddleware(env));
 
+  const conciergeHtmlPath = path.join(process.cwd(), 'index.html');
+  app.get(['/', '/concierge'], (_req, res, next): void => {
+    res.sendFile(conciergeHtmlPath, (err): void => {
+      if (err) next();
+    });
+  });
+
   app.get(ROUTES.HEALTH, createShallowHealthHandler({ startedAt }));
 
   const healthDeps = {
@@ -82,6 +92,7 @@ export function buildApp(options: BuildAppOptions): BuiltApplication {
   app.get(ROUTES.HEALTH_DEEP, apiKeyAuth, rateLimiterMiddleware, createDeepHealthHandler(healthDeps));
 
   const mcpRouter = Router();
+  mcpRouter.use(createMcpCorsMiddleware());
   mcpRouter.use(apiKeyAuth);
   mcpRouter.use(rateLimiterMiddleware);
   mcpRouter.use(createMcpRouter({ memberService, partnerConfigService }));

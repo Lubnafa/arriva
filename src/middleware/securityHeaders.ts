@@ -9,6 +9,5 @@ export const securityHeadersMiddleware: RequestHandler = (_req, res, next): void
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Content-Security-Policy', "default-src 'none'");
   next();
 };

@@ -23,6 +23,7 @@ RUN apk add --no-cache wget \
 
 COPY --from=deps --chown=appuser:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=appuser:nodejs /app/dist ./dist
+COPY --chown=appuser:nodejs index.html ./index.html
 COPY --chown=appuser:nodejs package.json ./
 
 USER appuser
