@@ -1,5 +1,7 @@
 # Arrivia Travel Recommendations MCP Server
 
+**Author:** Lubna Fatima
+
 This service exposes versioned HTTP endpoints that behave like a lightweight MCP tool host for travel recommendations: partners authenticate with scoped API keys, validated inputs flow through heuristic ranking plus partner commercial rules, and structured logs make operations observable.
 
 The runtime is intentionally small (Express + Zod + Pino) so it deploys cleanly on AWS App Runner or ECS while leaving clear seams for Redis caches, external catalogs, and ML rankers later.

@@ -2,6 +2,7 @@
   "name": "arrivia-travel-recommendations",
   "version": "1.0.0",
   "description": "MCP server for Arrivia travel recommendations (API key auth, heuristics engine).",
+  "author": "Lubna Fatima",
   "main": "dist/server.js",
   "engines": {
     "node": ">=20"
