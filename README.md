@@ -217,6 +217,74 @@ For ECS Fargate the same container applies—place secrets in AWS Secrets Manage
 | Blank recommendations | Support tickets | Strict exclusions/caps | Validate partner rules JSON, inspect `applied_rules` field in responses |
 | Slow deploys | Release engineer | Draining connections | Confirm SIGTERM handling; increase grace window if workloads exceed 10s |
 
+## Document: Sections A–C
+
+### Section A — Architecture & trade-offs
+
+#### Architecture overview
+
+Arrivia sits between partner MCP clients and two upstreams: a member profile service and a partner configuration service. Authenticated `POST /v1/mcp/invoke` requests are validated with Zod, scoped to the API key’s `partner_id`, and dispatched by tool name. For `get_member_recommendations`, the handler loads **member** and **partner rules** in parallel (`MemberService` and `PartnerConfigService`), each behind its own circuit breaker. A static catalog of candidate destinations is ranked in-process (`rankRecommendations`) using the member’s tier and travel history together with the partner’s `tier_multipliers`. **Commercial rules**—category exclusions and a recommendation cap—are applied afterward (`applyPartnerRules`), and the JSON response includes `applied_rules` so operators and partners can see what was enforced. The MCP layer does not embed business policy in the model; it orchestrates IO, ranking, and deterministic enforcement. Partner rules are fetched over HTTP from `PARTNER_CONFIG_URL`, optionally served from an in-process TTL cache keyed by `partner_id`, which reduces load and latency at the cost of freshness across replicas until a shared cache (for example Redis) is introduced.
+
+#### Design trade-offs
+
+1. **Heuristic ranking instead of an ML ranker at launch.** A deterministic score (tier multiplier, repeat-destination penalty, sorted catalog) ships quickly, avoids cold-start without engagement labels, and keeps outcomes explainable. The trade-off is a lower quality ceiling versus a trained reranker; the code keeps a clear seam (`rankRecommendations`, catalog injection) for a future model.
+
+2. **In-process TTL cache for partner rules.** Caching cuts repeated HTTP calls to the partner config API and stabilizes latency under load. The trade-off is **staleness**: each App Runner or ECS task holds its own cache, so a partner change can take up to `PARTNER_CONFIG_CACHE_TTL_MS` to appear everywhere unless the cache is cleared or replaced with a shared store. That was accepted for early deployment simplicity with a documented migration path to Redis.
+
+#### Handling partner configuration changes
+
+If a partner **lowers** `max_recommendations` or **adds** a category to `exclude_categories`, the authoritative source is the partner config HTTP API: update the payload there first. This service will pick up new values on the next successful fetch after the entry expires from the TTL cache (or immediately on a cold miss). No application redeploy is required for pure data changes. If you need **instant** propagation, operators can restart tasks (clears in-memory state), reduce TTL temporarily, call any operational hook that clears `PartnerConfigService`’s cache, or implement the planned Redis-backed cache with explicit invalidation. If the **catalog** gains a new `category` string, confirm it matches the exclusion list semantics (comparison is case-insensitive on category). If exclusions should apply to new product types, ensure upstream rules and catalog metadata stay aligned; otherwise extend parsing or catalog typing and add tests.
+
+---
+
+### Section B — Production readiness & incident response
+
+#### Incident runbook entry: cruises shown despite cruise exclusion
+
+**Symptom:** A member reports the AI Concierge surfacing cruise recommendations while the partner’s configuration excludes cruises.
+
+**Diagnose**
+
+1. **Reproduce via API, not only the UI.** Call `get_member_recommendations` with the reported `member_id` and authenticated `partner_id`. Inspect `recommendations` and `applied_rules`. If `exclude_categories:cruise` (or similar) is present but cruises remain, suspect a **data bug** (candidate `category` not labeled `cruise`) or a code path bypassing enforcement. If the exclusion rule is **missing** from `applied_rules`, the filter did not run on excluded rows—check whether any rows are actually cruises.
+
+2. **Confirm partner payload.** Call `get_partner_rules` for the same partner (or query the partner config service directly). Verify `exclude_categories` includes `cruise` and that the MCP server returned fresh rules.
+
+3. **Check staleness and multi-replica behavior.** Compare timestamps across instances: an old in-process cache entry could still allow cruises until TTL expiry. Correlate `requestId` in logs with `partner_config_cache` hit/miss lines.
+
+4. **UI vs server.** If the API response is clean but the UI shows cruises, the Concierge may be **hallucinating** or blending non-server context (see README note on browser demos). Confirm the client only renders destinations returned by this service.
+
+**Confirm**
+
+- Integration-style check: rules from upstream match enforced list; `applied_rules` matches expectations; catalog categories for shown `destination_id`s align with product type.
+
+**Resolve**
+
+- **Upstream wrong:** Fix partner config service data; wait for TTL or roll restart / cache clear for immediate effect.
+- **Catalog mis-tagged:** Fix category on destinations and redeploy if catalog is versioned with the app.
+- **Client issue:** Fix prompt/tool usage so the model does not invent inventory; proxy chat through the server in production.
+
+Escalate to engineering if enforcement logic regresses (add a regression test locking `applyPartnerRules` behavior for that partner fixture).
+
+#### Part B2 — Required reasoning question (human verification)
+
+An AI coding assistant can sound authoritative when proposing “the” fix for partner-specific APIs—for example suggesting authorization checks only on `partner_id` in the body while ignoring that the authenticated principal must match, or recommending a cache header that would serve stale rules across tenants. A plausible wrong answer might be: “Return 403 if `exclude_categories` is empty,” conflating **missing** rules with **permissive** defaults, or “Strip categories in the ranker,” which duplicates policy in two layers and drifts.
+
+**How I would catch that before acting:** I would trace the real request path in this repository (`createMcpRouter` → parallel fetch → `rankRecommendations` → `applyPartnerRules`), grep for all readers of `PartnerRules`, and read existing tests in `tests/` for partner variants. I would verify the assistant’s claim against **Zod schemas**, **error codes**, and **fixtures** (`partner_integration` cruise exclusion), and run `npm test`. If the suggestion contradicts ADRs or duplicates enforcement, I would reject it. I would also validate any security change against OWASP-style assumptions (cross-partner ID spoofing, cache poisoning). Only after the behavior matches the contract and tests pass would I merge.
+
+---
+
+### Section C — AI usage log (mandatory)
+
+Three representative interactions from building and hardening this service:
+
+| # | What I asked | What the AI gave | Kept / changed / rejected |
+| --- | --- | --- | --- |
+| 1 | Help structure an MCP `invoke` handler that loads member and partner data in parallel and applies exclusions after ranking. | A sequential layout and a single generic “rules” object. | **Changed** to `Promise.all` for member + partner fetches and a dedicated `applyPartnerRules` step so ordering stays obvious in logs and tests. |
+| 2 | Suggest production middleware for an Express MCP API. | A long stack including options we did not need yet. | **Kept** ideas aligned with this repo (structured logging, rate limits, JSON body limits); **rejected** broad refactors not tied to the current threat model. |
+| 3 | Draft README language for deployment on AWS App Runner. | Generic container steps. | **Kept** the ECR → App Runner flow and secrets guidance; **tightened** wording to match actual health routes (`/health`, `/health/deep`) and env vars from `loadEnv()`. |
+
+This log is illustrative of how AI output is treated as **draft material** verified against code, tests, and existing decisions—not as a source of truth.
+
 ## Design decisions
 
 - **Heuristics before ML:** Ships quickly, stays explainable (`applied_rules` tells partners why inventory shifted), and avoids cold-start problems until labeled data exists.
