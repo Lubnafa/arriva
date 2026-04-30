@@ -1,0 +1,10 @@
+node_modules
+coverage
+.git
+.env
+.env.*
+tests
+scripts
+jest.config.js
+*.md
+!README.md

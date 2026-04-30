@@ -1,0 +1,35 @@
+{
+  "name": "arrivia-travel-recommendations",
+  "version": "1.0.0",
+  "description": "MCP server for Arrivia travel recommendations (API key auth, heuristics engine).",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "ts-node --transpile-only src/server.ts",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "generate-api-key": "ts-node --transpile-only scripts/generateApiKey.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "pino": "^9.6.0",
+    "uuid": "^11.0.5",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.13.5",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  },
+  "private": true
+}
